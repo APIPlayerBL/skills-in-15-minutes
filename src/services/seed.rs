@@ -823,7 +823,16 @@ pub async fn seed_all(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     ];
 
     for (slug, title, desc, skill_slug, days, prefix) in long_programs {
-        let tid = ins_track(pool, slug, title, desc, "beginner", (days * 15) as i64, skill_slug).await;
+        let tid = ins_track(
+            pool,
+            slug,
+            title,
+            desc,
+            "beginner",
+            (days * 15) as i64,
+            skill_slug,
+        )
+        .await;
         for day in 1..=days {
             let lesson_title = format!("{} {}", prefix, day);
             let lesson_slug = format!("day-{:02}", day);
