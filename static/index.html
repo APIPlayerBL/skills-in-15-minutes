@@ -34,6 +34,8 @@ label{font-size:13px;color:var(--muted)}
 .error{color:var(--bad)}
 .ok{color:var(--ok)}
 .hint{color:var(--muted);font-size:13px}
+body.light{--bg:#f4f6fb;--card:#ffffff;--muted:#4b5563;--text:#1f2937;--border:#d1d5db;--acc:#2563eb;--ok:#16a34a;--bad:#dc2626}
+body.light header{background:#ffffff;border-bottom:1px solid var(--border)}
 .task{border:1px dashed var(--border);border-radius:10px;padding:10px;margin:8px 0}
 .task.correct{border-color:var(--ok)}
 .task.wrong{border-color:var(--bad)}
@@ -56,6 +58,20 @@ label{font-size:13px;color:var(--muted)}
 
 <script>
 const API = '/api/v1';
+const SETTINGS = {
+  theme: localStorage.getItem('theme') || 'dark',
+  lang: localStorage.getItem('lang') || 'ru',
+};
+const I18N = {
+  ru: {settings:'Настройки',login:'Войти',register:'Регистрация',logout:'Выйти',theme:'Тема',language:'Язык',dark:'Тёмная',light:'Светлая',save:'Сохранить',cancel:'Отмена',catalog:'Каталог',profile:'Профиль',schedule:'Расписание'},
+  en: {settings:'Settings',login:'Sign in',register:'Sign up',logout:'Log out',theme:'Theme',language:'Language',dark:'Dark',light:'Light',save:'Save',cancel:'Cancel',catalog:'Catalog',profile:'Profile',schedule:'Schedule'},
+  fr: {settings:'Paramètres',login:'Connexion',register:'Inscription',logout:'Déconnexion',theme:'Thème',language:'Langue',dark:'Sombre',light:'Clair',save:'Enregistrer',cancel:'Annuler',catalog:'Catalogue',profile:'Profil',schedule:'Planning'},
+  de: {settings:'Einstellungen',login:'Anmelden',register:'Registrieren',logout:'Abmelden',theme:'Design',language:'Sprache',dark:'Dunkel',light:'Hell',save:'Speichern',cancel:'Abbrechen',catalog:'Katalog',profile:'Profil',schedule:'Zeitplan'},
+  zh: {settings:'设置',login:'登录',register:'注册',logout:'退出',theme:'主题',language:'语言',dark:'深色',light:'浅色',save:'保存',cancel:'取消',catalog:'目录',profile:'个人资料',schedule:'日程'}
+};
+function t(key){ return (I18N[SETTINGS.lang] && I18N[SETTINGS.lang][key]) || I18N.ru[key] || key; }
+function applyTheme(){ document.body.classList.toggle('light', SETTINGS.theme === 'light'); }
+applyTheme();
 const state = { token: localStorage.getItem('access_token') || '', user: null, view: 'catalog' };
 
 function $(q, root=document){return root.querySelector(q)}
@@ -97,19 +113,20 @@ function setView(v){ state.view=v; renderNav(); render(); }
 function renderNav(){
   const nav = $('#nav');
   const items = [
-    ['catalog','Каталог'],
-    ['profile','Профиль'],
-    ['schedule','Расписание'],
+    ['catalog', t('catalog')],
+    ['profile', t('profile')],
+    ['schedule', t('schedule')],
   ];
   nav.innerHTML = items.map(([id,label]) =>
     `<button class="navbtn ${state.view===id?'active':''}" onclick="setView('${id}')">${label}</button>`).join('');
   const box = $('#userbox');
+  const settingsBtn = `<button class="btn ghost" onclick="openSettings()">⚙ ${escapeHtml(t('settings'))}</button>`;
   if(state.user){
-    box.innerHTML = `<span class="hint">${escapeHtml(state.user.display_name||state.user.email)}</span>
-      <button class="btn secondary" onclick="logout()">Выйти</button>`;
+    box.innerHTML = settingsBtn + `<span class="hint">${escapeHtml(state.user.display_name||state.user.email)}</span>
+      <button class="btn secondary" onclick="logout()">${escapeHtml(t('logout'))}</button>`;
   } else {
-    box.innerHTML = `<button class="btn" onclick="openAuth('login')">Войти</button>
-      <button class="btn secondary" onclick="openAuth('register')">Регистрация</button>`;
+    box.innerHTML = settingsBtn + `<button class="btn" onclick="openAuth('login')">${escapeHtml(t('login'))}</button>
+      <button class="btn secondary" onclick="openAuth('register')">${escapeHtml(t('register'))}</button>`;
   }
 }
 
@@ -468,6 +485,47 @@ async function loadSchedule(){
       <span class="badge">${escapeHtml(x.state)}</span>
     </div>`).join('')||'<div class="empty">Нет запланированных уроков</div>'}
   </div>`;
+}
+
+function openSettings(){
+  const langs = [
+    ['ru','Русский'],['en','English'],['fr','Français'],['de','Deutsch'],['zh','中文']
+  ];
+  showModal(`
+    <h3>${t('settings')}</h3>
+    <form id="settingsform" class="grid" style="gap:8px">
+      <div><label>${t('theme')}</label><br>
+        <select name="theme">
+          <option value="dark">${t('dark')}</option>
+          <option value="light">${t('light')}</option>
+        </select>
+      </div>
+      <div><label>${t('language')}</label><br>
+        <select name="lang">
+          ${langs.map(([v,l])=>`<option value="${v}">${escapeHtml(l)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row">
+        <button class="btn" type="submit">${t('save')}</button>
+        <button class="btn secondary" type="button" onclick="hideModal()">${t('cancel')}</button>
+      </div>
+    </form>
+  `);
+  const f = $('#settingsform');
+  f.theme.value = SETTINGS.theme;
+  f.lang.value = SETTINGS.lang;
+  f.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const fd = new FormData(f);
+    SETTINGS.theme = fd.get('theme');
+    SETTINGS.lang = fd.get('lang');
+    localStorage.setItem('theme', SETTINGS.theme);
+    localStorage.setItem('lang', SETTINGS.lang);
+    applyTheme();
+    hideModal();
+    renderNav();
+    render();
+  });
 }
 
 // init

@@ -794,5 +794,58 @@ pub async fn seed_all(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     )
     .await;
 
+    // Multi-month daily courses: ~15 minutes per day.
+    let long_programs = [
+        (
+            "english-monthly-track",
+            "Английский за 2 месяца (15 минут в день)",
+            "Ежедневные мини-уроки: грамматика, слова и фразы",
+            "english-zero",
+            60,
+            "English Day",
+        ),
+        (
+            "python-monthly-track",
+            "Python за 2 месяца (15 минут в день)",
+            "Ежедневные упражнения по Python для начинающих",
+            "python-zero",
+            60,
+            "Python Day",
+        ),
+        (
+            "computer-monthly-track",
+            "Компьютерная грамотность за 2 месяца (15 минут в день)",
+            "Ежедневные практические советы для уверенной работы",
+            "computer-basics",
+            60,
+            "Computer Day",
+        ),
+    ];
+
+    for (slug, title, desc, skill_slug, days, prefix) in long_programs {
+        let tid = ins_track(pool, slug, title, desc, "beginner", (days * 15) as i64, skill_slug).await;
+        for day in 1..=days {
+            let lesson_title = format!("{} {}", prefix, day);
+            let lesson_slug = format!("day-{:02}", day);
+            ins_lesson(
+                pool,
+                &tid,
+                &lesson_slug,
+                &lesson_title,
+                day as i64,
+                15,
+                "Короткий урок на 15 минут. Выполните задание и переходите к следующему дню.",
+                vec![(
+                    "mcq",
+                    "Готовы продолжить обучение завтра?",
+                    "[{\"id\":\"a\",\"text\":\"Да, продолжу\"},{\"id\":\"b\",\"text\":\"Нет\"}]",
+                    "a",
+                    1,
+                )],
+            )
+            .await;
+        }
+    }
+
     Ok(())
 }
