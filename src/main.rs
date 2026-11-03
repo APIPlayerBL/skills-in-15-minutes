@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use axum::extract::Path;
+use axum::http::Uri;
 use axum::http::{header, StatusCode};
 use axum::response::Response;
 use axum::routing::get;
@@ -34,11 +34,12 @@ use wry::WebViewBuilder;
 #[folder = "static/"]
 struct StaticAssets;
 
-async fn static_handler(Path(path): Path<String>) -> Response {
-    let path = if path.is_empty() || path == "/" {
+async fn static_handler(uri: Uri) -> Response {
+    let raw = uri.path();
+    let path = if raw.is_empty() || raw == "/" {
         "index.html".to_string()
     } else {
-        path.trim_start_matches('/').to_string()
+        raw.trim_start_matches('/').to_string()
     };
     if let Some(file) = StaticAssets::get(&path) {
         let mime = mime_guess::from_path(&path).first_or_octet_stream();
