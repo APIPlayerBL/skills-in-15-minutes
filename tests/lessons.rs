@@ -116,12 +116,11 @@ async fn complete_success_and_idempotent() {
         answers.push(json!({"task_id": t["id"].as_str().unwrap(), "answer": "a"}));
     }
     // adjust answer to known key where possible not necessary for success count maybe; at least first mcq expects b in english. Use explicit correct answers:
-    // redo with task keys? We don't know expected answers here. Instead choose likely first answer "b" for first; generic could lower score. To ensure pass, fetch not answer keys (server doesn't return keys). We'll just submit "b"/"a" blindly? Need at least 60 to complete. Better inspect seed: first lesson mcq expected "b", short contains "reschedule meeting". Let's craft:
-    // We'll submit all first-choice where expected maybe; but can't know. Use direct from seed? We'll manually set answers below instead of loop:
+    // New seed content: first task of the first English lesson is a single MCQ
+    // with option "a" as the correct answer.
     let req_body = json!({
         "task_answers": [
-            {"task_id": tasks[0]["id"], "answer": "b"},
-            {"task_id": tasks[1]["id"], "answer": "Reschedule meeting"}
+            {"task_id": tasks[0]["id"], "answer": "a"}
         ],
         "client_started_at": "2026-11-03T10:00:00Z"
     });
