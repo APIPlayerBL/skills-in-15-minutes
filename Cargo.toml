@@ -28,6 +28,8 @@ base64 = "0.22"
 regex = "1"
 mime_guess = "2"
 zip = "2"
+wry = "0.57.1"
+tao = "0.37.2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

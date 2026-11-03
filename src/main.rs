@@ -1,9 +1,12 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use axum::Router;
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
-use tracing_subscriber::EnvFilter;
 
 pub mod config;
 pub mod domain;
@@ -17,51 +20,92 @@ pub mod state;
 use config::Config;
 use state::AppState;
 
-#[tokio::main]
-async fn main() {
+use tao::dpi::LogicalSize;
+use tao::event::{Event, WindowEvent};
+use tao::event_loop::{ControlFlow, EventLoop};
+use tao::window::WindowBuilder;
+use wry::WebViewBuilder;
+
+fn main() {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
-        .init();
 
     let cfg = Config::from_env();
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect(&cfg.database_url)
-        .await
-        .expect("db connect");
-    sqlx::query("PRAGMA journal_mode=WAL;")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("PRAGMA busy_timeout=5000;")
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("PRAGMA foreign_keys=ON;")
-        .execute(&pool)
-        .await
-        .ok();
+    let db_url = cfg.database_url.clone();
+    let addr = cfg.bind_addr.clone();
 
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await
-        .expect("migrate");
-    crate::services::seed::seed_all(&pool).await.ok();
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let pool = rt.block_on(async {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect(&db_url)
+            .await
+            .expect("db connect");
+        sqlx::query("PRAGMA journal_mode=WAL;")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("PRAGMA busy_timeout=5000;")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("PRAGMA foreign_keys=ON;")
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        crate::services::seed::seed_all(&pool).await.ok();
+        pool
+    });
 
     let state = Arc::new(AppState::new(pool, cfg.clone()));
-    let app: Router = routes::router(state.clone())
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-        .layer(tower_http::trace::TraceLayer::new_for_http())
-        .fallback_service(ServeDir::new("static"));
+    let state_for_server = state.clone();
+    let addr_for_server = addr.clone();
+    thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().expect("server runtime");
+        rt.block_on(async {
+            let app: Router = routes::router(state_for_server.clone())
+                .layer({
+                    let origins = std::env::var("CORS_ORIGINS")
+                        .unwrap_or_else(|_| "http://127.0.0.1:8080,http://localhost:8080,http://127.0.0.1:8099,http://localhost:8099".to_string());
+                    let origins: Vec<axum::http::HeaderValue> =
+                        origins.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+                    CorsLayer::new().allow_origin(origins).allow_methods(Any).allow_headers(Any)
+                })
+                .layer(tower_http::trace::TraceLayer::new_for_http())
+                .fallback_service(ServeDir::new("static"));
+            let listener = tokio::net::TcpListener::bind(&addr_for_server)
+                .await
+                .unwrap();
+            axum::serve(listener, app).await.unwrap();
+        });
+    });
 
-    let addr = cfg.bind_addr.clone();
-    tracing::info!("listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    thread::sleep(Duration::from_secs(2));
+
+    let url = format!("http://{}", addr);
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new()
+        .with_title("Навыки за 15 минут")
+        .with_inner_size(LogicalSize::new(1080.0, 720.0))
+        .build(&event_loop)
+        .unwrap();
+
+    let _webview = WebViewBuilder::new()
+        .with_url(&url)
+        .build(&window)
+        .expect("webview");
+
+    event_loop.run(move |event, _target, control_flow| {
+        *control_flow = ControlFlow::Wait;
+        if let Event::WindowEvent {
+            event: WindowEvent::CloseRequested,
+            ..
+        } = event
+        {
+            *control_flow = ControlFlow::Exit;
+        }
+    });
 }
