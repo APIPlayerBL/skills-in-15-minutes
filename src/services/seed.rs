@@ -856,5 +856,83 @@ pub async fn seed_all(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         }
     }
 
+    // Add two higher difficulty levels for every core course so that each
+    // course has beginner, intermediate and advanced tracks.
+    let core_courses = [
+        ("english-work", "Английский для работы", "english-work"),
+        ("python-auto", "Python для автоматизации", "python-auto"),
+        ("personal-finance", "Личные финансы", "personal-finance"),
+        ("productivity", "Продуктивность и фокус", "productivity"),
+        ("computer-basics", "Компьютер и интернет", "computer-basics"),
+        (
+            "internet-safety",
+            "Безопасность в интернете",
+            "internet-safety",
+        ),
+        ("math-basics", "Математика для жизни", "math-basics"),
+        ("study-skills", "Как учиться", "study-skills"),
+        ("english-zero", "Английский с нуля", "english-zero"),
+        ("python-zero", "Основы Python", "python-zero"),
+        (
+            "spreadsheets",
+            "Таблицы Excel/Google Sheets",
+            "spreadsheets",
+        ),
+    ];
+
+    for (base_slug, base_title, skill_slug) in core_courses {
+        for level in 2..=3 {
+            let track_slug = format!("{}-level{}", base_slug, level);
+            let difficulty = if level == 2 {
+                "intermediate"
+            } else {
+                "advanced"
+            };
+            let track_title = format!("{} — уровень {}", base_title, level);
+            let lessons = if level == 2 { 6 } else { 8 };
+            let track_desc = if level == 2 {
+                "Средний уровень: применение базовых знаний на практике"
+            } else {
+                "Продвинутый уровень: нестандартные задачи и стратегии"
+            };
+            let tid = ins_track(
+                pool,
+                &track_slug,
+                &track_title,
+                track_desc,
+                difficulty,
+                (lessons * 15) as i64,
+                skill_slug,
+            )
+            .await;
+
+            for i in 1..=lessons {
+                let lesson_title = format!("Уровень {} — урок {}", level, i);
+                let lesson_slug = format!("level{}-lesson-{:02}", level, i);
+                let prompt = if level == 2 {
+                    format!("Как лучше применить изученный материал в ситуации {}?", i)
+                } else {
+                    format!("Какую стратегию выбрать для сложной ситуации {}?", i)
+                };
+                let options = if level == 2 {
+                    "[{\"id\":\"a\",\"text\":\"Применить изученный метод\"},{\"id\":\"b\",\"text\":\"Действовать наобум\"},{\"id\":\"c\",\"text\":\"Игнорировать задачу\"}]"
+                } else {
+                    "[{\"id\":\"a\",\"text\":\"Проанализировать и выбрать оптимальную стратегию\"},{\"id\":\"b\",\"text\":\"Выбрать первое попавшееся\"},{\"id\":\"c\",\"text\":\"Отказаться от решения\"},{\"id\":\"d\",\"text\":\"Скопировать чужой ответ\"}]"
+                };
+                ins_lesson(
+                    pool,
+                    &tid,
+                    &lesson_slug,
+                    &lesson_title,
+                    i as i64,
+                    15,
+                    "Урок средней/продвинутой сложности с практическим заданием.",
+                    vec![("mcq", &prompt, options, "a", 1)],
+                )
+                .await;
+            }
+        }
+    }
+
     Ok(())
 }
