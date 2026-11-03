@@ -30,6 +30,7 @@ mime_guess = "2"
 zip = "2"
 wry = "0.57.1"
 tao = "0.37.2"
+rust-embed = "8.13.0"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

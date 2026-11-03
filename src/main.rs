@@ -1,12 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use axum::extract::Path;
+use axum::http::{header, StatusCode};
+use axum::response::Response;
+use axum::routing::get;
 use axum::Router;
+use rust_embed::RustEmbed;
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::ServeDir;
 
 pub mod config;
 pub mod domain;
@@ -25,6 +29,43 @@ use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop};
 use tao::window::WindowBuilder;
 use wry::WebViewBuilder;
+
+#[derive(RustEmbed)]
+#[folder = "static/"]
+struct StaticAssets;
+
+async fn static_handler(Path(path): Path<String>) -> Response {
+    let path = if path.is_empty() || path == "/" {
+        "index.html".to_string()
+    } else {
+        path.trim_start_matches('/').to_string()
+    };
+    if let Some(file) = StaticAssets::get(&path) {
+        let mime = mime_guess::from_path(&path).first_or_octet_stream();
+        let mut resp = Response::builder()
+            .status(StatusCode::OK)
+            .body(axum::body::Body::from(file.data.into_owned()))
+            .unwrap();
+        resp.headers_mut()
+            .insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap());
+        resp
+    } else if let Some(file) = StaticAssets::get("index.html") {
+        let mut resp = Response::builder()
+            .status(StatusCode::OK)
+            .body(axum::body::Body::from(file.data.into_owned()))
+            .unwrap();
+        resp.headers_mut().insert(
+            header::CONTENT_TYPE,
+            "text/html; charset=utf-8".parse().unwrap(),
+        );
+        resp
+    } else {
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(axum::body::Body::from("not found"))
+            .unwrap()
+    }
+}
 
 fn main() {
     dotenvy::dotenv().ok();
@@ -75,7 +116,7 @@ fn main() {
                     CorsLayer::new().allow_origin(origins).allow_methods(Any).allow_headers(Any)
                 })
                 .layer(tower_http::trace::TraceLayer::new_for_http())
-                .fallback_service(ServeDir::new("static"));
+                .fallback(get(static_handler));
             let listener = tokio::net::TcpListener::bind(&addr_for_server)
                 .await
                 .unwrap();
