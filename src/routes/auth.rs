@@ -54,6 +54,20 @@ struct AuthResp {
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
+
+fn format_refresh_cookie(raw: &str) -> String {
+    let secure = std::env::var("COOKIE_SECURE")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let mut cookie = format!(
+        "refresh_token={}; HttpOnly; Path=/; Max-Age=2592000; SameSite=Lax",
+        raw
+    );
+    if secure {
+        cookie.push_str("; Secure");
+    }
+    cookie
+}
 fn hash_token(raw: &str) -> String {
     let mut h = Sha256::new();
     h.update(raw.as_bytes());
@@ -114,10 +128,7 @@ async fn issue_refresh_cookie(db: &SqlitePool, user_id: &str) -> Result<String, 
         .bind(&expires)
         .execute(db)
         .await?;
-    Ok(format!(
-        "refresh_token={}; HttpOnly; Path=/; Max-Age=2592000; SameSite=Lax",
-        raw
-    ))
+    Ok(format_refresh_cookie(&raw))
 }
 
 async fn login(
@@ -160,7 +171,7 @@ async fn refresh(
     State(st): State<AppState>,
     headers: HeaderMap,
     req: axum::extract::Json<Option<RefreshReq>>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<(HeaderMap, Json<serde_json::Value>), AppError> {
     // read cookie or body
     let mut raw: Option<String> = None;
     if let Some(c) = headers.get("cookie").and_then(|h| h.to_str().ok()) {
@@ -235,8 +246,12 @@ async fn refresh(
         .await?
         .get("role");
     let access = make_access_token(&user_id, &role, &st.config.jwt_secret);
-    Ok(Json(
-        serde_json::json!({"access_token": access, "expires_in": 900}),
+    let cookie = format_refresh_cookie(&new_raw);
+    let mut headers = HeaderMap::new();
+    headers.insert(SET_COOKIE, cookie.parse().unwrap());
+    Ok((
+        headers,
+        Json(serde_json::json!({"access_token": access, "expires_in": 900})),
     ))
 }
 

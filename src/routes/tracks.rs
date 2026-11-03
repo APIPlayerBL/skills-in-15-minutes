@@ -131,7 +131,7 @@ async fn enroll(
 
 async fn get_cert(
     State(st): State<AppState>,
-    _auth: AuthUser,
+    auth: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
     let track_id: String = sqlx::query_scalar("SELECT id FROM tracks WHERE id=? OR slug=?")
@@ -140,10 +140,26 @@ async fn get_cert(
         .fetch_optional(&st.db)
         .await?
         .ok_or(AppError::NotFound("track not found".into()))?;
-    // just placeholder list user's certs for track
-    Ok(Json(
-        serde_json::json!({"track_id": track_id, "certificate": null}),
-    ))
+    use sqlx::Row;
+    let row = sqlx::query(
+        "SELECT id,verify_token,issued_at,metadata_json FROM certificates WHERE user_id=? AND track_id=?",
+    )
+    .bind(&auth.user_id)
+    .bind(&track_id)
+    .fetch_optional(&st.db)
+    .await?;
+    match row {
+        Some(r) => Ok(Json(serde_json::json!({
+            "track_id": track_id,
+            "certificate": {
+                "id": r.get::<String,_>("id"),
+                "verify_token": r.get::<String,_>("verify_token"),
+                "issued_at": r.get::<String,_>("issued_at"),
+                "metadata": serde_json::from_str::<serde_json::Value>(&r.get::<String,_>("metadata_json")).unwrap_or_default(),
+            }
+        }))),
+        None => Err(AppError::NotFound("certificate not found".into())),
+    }
 }
 
 async fn list_skills(State(st): State<AppState>) -> Result<Json<serde_json::Value>> {

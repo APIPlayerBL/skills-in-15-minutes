@@ -1,1 +1,475 @@
-<!doctype html><html><body><h1>Skills in 15 min</h1><script src="/js/app.js"></script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Навыки за 15 минут</title>
+<style>
+:root{--bg:#0f1220;--card:#181d32;--muted:#8b95b5;--text:#e9edf8;--acc:#6ea8fe;--ok:#3dd68c;--bad:#ff6b6b;--border:#2a3150}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+Top navigation bar sticky at page top with title; primary app UI container below. Styles include cards, buttons, inputs, chips, grid, progress bar, hint text, sidebar, forms, task items, utility classes.
+header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#11162a,#0f1220cc);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--acc);color:#0b1020;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600}
+.btn.secondary{background:#263055;color:var(--text)}
+.btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input,textarea,select{background:#10152b;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font:inherit}
+label{font-size:13px;color:var(--muted)}
+.grid{display:grid;gap:12px}
+.grid.cols2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.grid.cols3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.track{border:1px solid var(--border);border-radius:12px;padding:12px;background:#14192d}
+.track h3{margin:0 0 6px}
+.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:#263055;color:var(--muted)}
+.progress{height:8px;background:#0b1020;border-radius:99px;overflow:hidden}
+.progress > div{height:100%;background:var(--ok);transition:width .3s}
+.navbtn{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px 10px;border-radius:8px}
+.navbtn.active{background:#263055;color:var(--text)}
+.hidden{display:none}
+.error{color:var(--bad)}
+.ok{color:var(--ok)}
+.hint{color:var(--muted);font-size:13px}
+.task{border:1px dashed var(--border);border-radius:10px;padding:10px;margin:8px 0}
+.task.correct{border-color:var(--ok)}
+.task.wrong{border-color:var(--bad)}
+.resultbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+#content{min-height:60vh}
+.empty{color:var(--muted);padding:20px;text-align:center}
+.modal-back{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:20}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;max-width:460px;width:92%}
+</style>
+</head>
+<body>
+<header>
+  <h1>Навыки за 15 минут</h1>
+  <nav id="nav" class="row"></nav>
+  <div id="userbox" class="row" style="margin-left:auto"></div>
+</header>
+<main id="content"></main>
+
+<div id="modal" class="modal-back"><div class="modal" id="modal-body"></div></div>
+
+<script>
+const API = '/api/v1';
+const state = { token: localStorage.getItem('access_token') || '', user: null, view: 'catalog' };
+
+function $(q, root=document){return root.querySelector(q)}
+function escapeHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+async function api(path, opts={}){
+  const {method='GET', body, headers={}} = opts;
+  const h = {'content-type':'application/json', ...headers};
+  if(state.token) h['authorization']='Bearer '+state.token;
+  const resp = await fetch(API+path, {method, headers:h, body: body?JSON.stringify(body):undefined, credentials:'include'});
+  if(resp.status===401 && state.token){
+    const r = await fetch(API+'/auth/refresh', {method:'POST', credentials:'include'});
+    if(r.ok){
+      const j = await r.json();
+      state.token = j.access_token;
+      localStorage.setItem('access_token', state.token);
+      h['authorization']='Bearer '+state.token;
+      const r2 = await fetch(API+path, {method, headers:h, body: body?JSON.stringify(body):undefined, credentials:'include'});
+      return r2;
+    }
+  }
+  return resp;
+}
+async function apiJson(path, opts={}){
+  const r = await api(path, opts);
+  const txt = await r.text();
+  let json = null;
+  try { json = txt?JSON.parse(txt):null; } catch(e){ json=txt; }
+  return {status:r.status, ok:r.ok, data:json};
+}
+
+function showModal(html){ const m=$('#modal'); $('#modal-body').innerHTML=html; m.style.display='flex'; }
+function hideModal(){ $('#modal').style.display='none'; }
+$('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') hideModal(); });
+
+// Views
+function setView(v){ state.view=v; renderNav(); render(); }
+
+function renderNav(){
+  const nav = $('#nav');
+  const items = [
+    ['catalog','Каталог'],
+    ['profile','Профиль'],
+    ['schedule','Расписание'],
+  ];
+  nav.innerHTML = items.map(([id,label]) =>
+    `<button class="navbtn ${state.view===id?'active':''}" onclick="setView('${id}')">${label}</button>`).join('');
+  const box = $('#userbox');
+  if(state.user){
+    box.innerHTML = `<span class="hint">${escapeHtml(state.user.display_name||state.user.email)}</span>
+      <button class="btn secondary" onclick="logout()">Выйти</button>`;
+  } else {
+    box.innerHTML = `<button class="btn" onclick="openAuth('login')">Войти</button>
+      <button class="btn secondary" onclick="openAuth('register')">Регистрация</button>`;
+  }
+}
+
+async function logout(){
+  await fetch(API+'/auth/logout', {method:'POST', credentials:'include'});
+  state.token=''; state.user=null; localStorage.removeItem('access_token'); setView('catalog');
+}
+
+function openAuth(mode){
+  showModal(`
+    <h3>${mode==='login'?'Вход':'Регистрация'}</h3>
+    <form id="authform" class="grid" style="gap:8px">
+      <div><label>Email</label><br><input name="email" type="email" required></div>
+      <div><label>Пароль (≥10)</label><br><input name="password" type="password" required></div>
+      ${mode==='register'?'<div><label>Имя</label><br><input name="display_name"></div>':''}
+      <div class="row"><button class="btn" type="submit">${mode==='login'?'Войти':'Создать'}</button>
+      <button class="btn secondary" type="button" onclick="hideModal()">Отмена</button></div>
+      <div id="autherr" class="error"></div>
+    </form>
+  `);
+  $('#authform').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f=new FormData(e.target);
+    const body={email:f.get('email'),password:f.get('password')};
+    if(mode==='register') body.display_name=f.get('display_name')||undefined;
+    const {status,data}=await apiJson('/auth/'+(mode==='login'?'login':'register'), {method:'POST', body});
+    if(!data || !data.access_token){
+      $('#autherr').textContent = (data&&data.detail)||JSON.stringify(data)||('Ошибка '+status);
+      return;
+    }
+    state.token=data.access_token; localStorage.setItem('access_token', state.token);
+    await loadUser();
+    hideModal();
+    setView('catalog');
+  });
+}
+
+async function loadUser(){
+  if(!state.token){ state.user=null; return; }
+  const {ok,data}=await apiJson('/me');
+  if(ok) state.user=data;
+  else { state.token=''; localStorage.removeItem('access_token'); state.user=null; }
+}
+
+let SKILLS=[], TRACKS=[], TRACK=null, LESSON=null;
+
+async function loadCatalog(){
+  const s=await apiJson('/skills'); SKILLS = (s.data&&s.data.items)||[];
+  const t=await apiJson('/tracks?limit=100'); TRACKS = (t.data&&t.data.items)||[];
+}
+
+function render(){ 
+  const c=$('#content');
+  if(state.view==='catalog'){ renderCatalog(c); }
+  else if(state.view==='track'){ renderTrack(c); }
+  else if(state.view==='lesson'){ renderLesson(c); }
+  else if(state.view==='profile') { loadProfile(); }
+  else if(state.view==='schedule') { loadSchedule(); }
+}
+
+async function renderCatalog(c){
+  await loadCatalog();
+  let skillSel = `<select id="skillfilter"><option value="">Все навыки</option>`+
+    SKILLS.map(s=>`<option value="${s.slug}">${escapeHtml(s.title)}</option>`).join('')+`</select>`;
+  let diffSel = `<select id="difffilter"><option value="">Любая сложность</option>
+    <option value="beginner">beginner</option><option value="intermediate">intermediate</option><option value="advanced">advanced</option></select>`;
+  c.innerHTML = `
+    <div class="card row">
+      <h2>Каталог треков</h2>
+      <div style="margin-left:auto" class="row">${skillSel}${diffSel}
+        <button class="btn secondary" onclick="applyFilters()">Фильтр</button></div>
+    </div>
+    <div id="trackgrid" class="grid cols2"></div>
+  `;
+  drawTracks();
+}
+
+function skillTitleBySlug(slug){ const s=SKILLS.find(x=>x.slug===slug); return s?s.title:slug; }
+
+async function skillsTracks(slug, container){
+  const r=await apiJson('/skills/'+slug+'/tracks');
+  const items=(r.data&&r.data.items)||[];
+  container.innerHTML = items.length? items.map(t=>trackCard(t)).join('') : '<div class="empty">Нет треков</div>';
+}
+
+function trackCard(t){
+  return `<div class="track">
+    <h3>${escapeHtml(t.title)}</h3>
+    <div class="hint">${escapeHtml(t.description||'')}</div>
+    <div class="row" style="margin-top:8px">
+      <span class="badge">${escapeHtml(t.difficulty)}</span>
+      <span class="badge">${t.estimated_minutes} мин</span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" onclick="openTrack('${t.id||t.slug}')">Открыть</button>
+    </div>
+  </div>`;
+}
+
+function drawTracks(){
+  const grid=$('#trackgrid');
+  let skill=$('#skillfilter').value;
+  let diff=$('#difffilter').value;
+  let list=TRACKS;
+  if(diff) list=list.filter(t=>t.difficulty===diff);
+  if(skill){
+    // filter client side by skill name heuristic not available; fetch
+    apiJson('/skills/'+skill+'/tracks').then(r=>{
+      const ids=new Set((r.data&&r.data.items||[]).map(x=>x.id));
+      const filtered=TRACKS.filter(t=>ids.has(t.id));
+      grid.innerHTML = filtered.length? filtered.map(trackCard).join('') : '<div class="empty">Нет треков</div>';
+    });
+    return;
+  }
+  grid.innerHTML = list.length? list.map(trackCard).join('') : '<div class="empty">Нет треков</div>';
+}
+
+function applyFilters(){ drawTracks(); }
+
+async function openTrack(id){
+  state.view='track'; state.trackId=id;
+  TRACK=null; render();
+  const r=await apiJson('/tracks/'+id);
+  if(!r.ok){ $('#content').innerHTML=`<div class="error">Трек не найден</div>`; return; }
+  TRACK=r.data; state.view='track'; render();
+}
+
+async function renderTrack(c){
+  if(!TRACK){ c.innerHTML='<div class="empty">Загрузка...</div>'; return; }
+  const t=TRACK;
+  const lessons=t.lessons||[];
+  // progress if auth
+  let progMap={};
+  if(state.user){
+    const p=await apiJson('/me/progress?track_id='+encodeURIComponent(t.id));
+    (p.data&&p.data.items||[]).forEach(x=> progMap[x.lesson_id]=x);
+  }
+  const enrolled = state.user ? true : false;
+  c.innerHTML = `
+    <button class="btn secondary" onclick="setView('catalog')">← Каталог</button>
+    <div class="card">
+      <h2>${escapeHtml(t.title)}</h2>
+      <div class="hint">${escapeHtml(t.description||'')}</div>
+      <div class="row" style="margin-top:8px">
+        <span class="badge">${escapeHtml(t.difficulty)}</span>
+        <span class="badge">${t.estimated_minutes} мин</span>
+        <span class="badge">версия ${t.version}</span>
+      </div>
+      <div class="row" style="margin-top:12px">
+        ${state.user?`<button class="btn" id="enrollBtn" onclick="enroll('${t.id}')">Записаться</button>
+        <button class="btn secondary" onclick="issueCertificate('${t.id}')">Сертификат</button>`:
+        `<span class="hint">Войдите, чтобы записаться</span>`}
+      </div>
+    </div>
+    <div class="card">
+      <h3>Уроки (${lessons.length})</h3>
+      ${lessons.map((l,i)=>`
+        <div class="row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="flex:1">
+            <b>${i+1}. ${escapeHtml(l.title)}</b>
+            <div class="hint">${l.duration_min} мин</div>
+            ${progMap[l.id]?`<span class="badge">${progMap[l.id].status} ${progMap[l.id].score!=null?progMap[l.id].score+'%':''}</span>`:''}
+          </div>
+          <button class="btn ghost" onclick="openLesson('${l.id}')">Открыть</button>
+        </div>
+      `).join('')||'<div class="empty">Нет уроков</div>'}
+    </div>
+  `;
+}
+
+async function enroll(trackId){
+  const r=await apiJson('/tracks/'+trackId+'/enroll', {method:'POST'});
+  if(r.ok){ alert('Запись выполнена'); }
+  else alert((r.data&&r.data.detail)||'Ошибка');
+}
+
+async function openLesson(id){
+  state.view='lesson'; state.lessonId=id; LESSON=null; render();
+  const r=await apiJson('/lessons/'+id);
+  if(!r.ok){ $('#content').innerHTML='<div class="error">Урок не найден</div>'; return; }
+  LESSON=r.data; state.view='lesson'; render();
+}
+
+function renderLesson(c){
+  if(!LESSON){ c.innerHTML='<div class="empty">Загрузка...</div>'; return; }
+  const L=LESSON;
+  const ctn=L.content||{};
+  const blocks=ctn.blocks||[];
+  const intro=ctn.intro||'';
+  const tasks=L.content&&L.content.tasks? L.content.tasks : (LESSON.content&&LESSON.content.tasks)||[];
+  // task ids from lesson tasks? L.content tasks were replaced by backend with task list.
+  const tlist = L.content.tasks||[];
+  c.innerHTML = `
+    <button class="btn secondary" onclick="openTrack(TRACK?TRACK.id:LESSON.track_id)">← К треку</button>
+    <div class="card">
+      <h2>${escapeHtml(L.title)}</h2>
+      <div class="hint">${L.duration_min} мин · урок #${L.order_index}</div>
+      <div style="margin-top:10px">${escapeHtml(intro)}</div>
+      <div id="blocks" style="margin-top:10px">${blocks.map(b=>`<p>${escapeHtml(b.value||'')}</p>`).join('')}</div>
+    </div>
+    <div class="card">
+      <h3>Задания</h3>
+      <form id="taskform">
+        ${tlist.map(t=>renderTask(t)).join('')}
+        <div class="row" style="margin-top:12px">
+          <button class="btn" type="submit" id="submitBtn">Отправить ответы</button>
+        </div>
+      </form>
+      <div id="result"></div>
+    </div>
+  `;
+  $('#taskform').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    await submitLesson(L.id, tlist);
+  });
+}
+
+function renderTask(t){
+  if(t.kind==='mcq'||t.kind==='multi'){
+    const opts=(t.options||[]);
+    return `<div class="task" data-task="${t.id}">
+      <div><b>${escapeHtml(t.prompt)}</b></div>
+      ${opts.map(o=>`<label style="display:block;margin:4px 0">
+        <input type="radio" name="${t.id}" value="${escapeHtml(o.id||o.text)}"> ${escapeHtml(o.text||o.id)}
+      </label>`).join('')}
+    </div>`;
+  }
+  return `<div class="task" data-task="${t.id}">
+    <div><b>${escapeHtml(t.prompt)}</b></div>
+    <input name="${t.id}" style="width:100%;margin-top:6px" placeholder="Ваш ответ">
+  </div>`;
+}
+
+async function submitLesson(lessonId, tlist){
+  const btn=$('#submitBtn'); btn.disabled=true;
+  const answers=[];
+  const form=$('#taskform');
+  for(const t of tlist){
+    let val=null;
+    if(t.kind==='mcq'||t.kind==='multi'){
+      const r=form.querySelector(`input[name="${CSS.escape(t.id)}"]:checked`);
+      val=r?r.value:null;
+    } else {
+      const inp=form.querySelector(`input[name="${CSS.escape(t.id)}"]`);
+      val=inp?inp.value:'';
+    }
+    answers.push({task_id:t.id, answer:val});
+  }
+  const {status,data}=await apiJson('/lessons/'+lessonId+'/complete', {method:'POST', body:{task_answers:answers}});
+  btn.disabled=false;
+  const res=$('#result');
+  if(!data){ res.innerHTML=`<div class="error">Ошибка ${status}</div>`; return; }
+  const score=data.score??0;
+  const passed=!!data.passed;
+  const results=data.task_results||[];
+  // mark tasks
+  results.forEach(r=>{
+    const el=document.querySelector(`.task[data-task="${CSS.escape(r.task_id)}"]`);
+    if(!el) return;
+    el.classList.remove('correct','wrong');
+    el.classList.add(r.correct?'correct':'wrong');
+  });
+  let html = `<div class="resultbar">
+    <span class="badge">${passed?'<span class="ok">Пройдено</span>':'<span class="error">Не пройдено</span>'}</span>
+    <span class="badge">Балл: ${score}%</span>
+  </div>`;
+  if(passed){
+    html+=`<div class="hint" style="margin-top:8px">Следующий шаг: откройте следующий урок или получите сертификат после завершения трека.</div>`;
+    if(data.schedule && data.schedule.due_at){
+      html+=`<div class="hint">Повторение: ${new Date(data.schedule.due_at).toLocaleDateString()}, интервал ${data.schedule.interval_days} д.</div>`;
+    }
+    if(data.next && data.next.lesson_id){
+      html+=`<div style="margin-top:8px"><button class="btn" onclick="openLesson('${data.next.lesson_id}')">Следующий урок</button></div>`;
+    }
+  }
+  res.innerHTML=html;
+  // update lesson cached progress? reload lesson
+}
+
+async function loadProfile(){
+  const c=$('#content');
+  if(!state.user){ c.innerHTML='<div class="card"><h2>Профиль</h2><p>Войдите, чтобы видеть прогресс.</p></div>'; return; }
+  const me=await apiJson('/me');
+  const summ=await apiJson('/me/progress/summary');
+  const sched=await apiJson('/me/schedule');
+  if(!me.ok) return;
+  const u=me.data;
+  const stats=u.stats||{};
+  let certSection='';
+  const items=(summ.data&&summ.data.items)||[];
+  const trackCards=items.map(x=>`
+    <div class="track">
+      <div><b>${escapeHtml(x.track_id)}</b></div>
+      <div class="progress" style="margin:6px 0"><div style="width:${x.percent||0}%"></div></div>
+      <div class="hint">${x.completed}/${x.total} уроков · ${x.percent||0}%</div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn secondary" onclick="issueCertificate('${x.track_id}')">Получить сертификат</button>
+      </div>
+    </div>
+  `).join('');
+  c.innerHTML = `
+    <div class="card">
+      <h2>Профиль</h2>
+      <div>${escapeHtml(u.display_name||u.email)}</div>
+      <div class="hint">${escapeHtml(u.email)} · ${escapeHtml(u.role)}</div>
+      <div class="row" style="margin-top:8px">
+        <span class="badge">треков: ${stats.tracks_enrolled||0}</span>
+        <span class="badge">уроков: ${stats.lessons_completed||0}</span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input id="newname" placeholder="Новое имя" value="${escapeHtml(u.display_name||'')}">
+        <button class="btn secondary" onclick="patchName()">Сохранить</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Прогресс по трекам</h3>
+      <div class="grid cols2">${trackCards||'<div class="empty">Нет данных</div>'}</div>
+    </div>
+    <div class="card" id="schedcard">
+      <h3>Ближайшее расписание</h3>
+      <div>${(sched.data&&sched.data.items||[]).map(x=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)"><div style="flex:1"><b>${escapeHtml(x.title)}</b><div class="hint">${escapeHtml(x.track_id)}</div></div><span class="badge">${new Date(x.due_at).toLocaleDateString()}</span><span class="badge">${escapeHtml(x.state)}</span></div>`).join('')||'<div class="empty">Нет элементов</div>'}</div>
+    </div>
+  `;
+}
+
+async function patchName(){
+  const name=$('#newname').value;
+  const r=await apiJson('/me', {method:'PATCH', body:{display_name:name}});
+  if(r.ok){ state.user=r.data; loadProfile(); }
+}
+
+async function issueCertificate(trackId){
+  const r=await apiJson('/tracks/'+trackId+'/certificate', {method:'POST'});
+  if(!r.ok){ alert((r.data&&r.data.detail)||'Нельзя выдать сертификат'); return; }
+  const d=r.data;
+  alert('Сертификат выдан: '+d.id);
+  // open print
+  window.open('/api/v1/certificates/'+d.id+'/print', '_blank');
+}
+
+async function loadSchedule(){
+  const c=$('#content');
+  const r=await apiJson('/me/schedule');
+  const items=(r.data&&r.data.items)||[];
+  c.innerHTML = `<div class="card"><h2>Расписание</h2>
+    ${items.map(x=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1"><b>${escapeHtml(x.title)}</b><div class="hint">${escapeHtml(x.track_id)}</div></div>
+      <span class="badge">${new Date(x.due_at).toLocaleString()}</span>
+      <span class="badge">${escapeHtml(x.state)}</span>
+    </div>`).join('')||'<div class="empty">Нет запланированных уроков</div>'}
+  </div>`;
+}
+
+// init
+(async function init(){
+  await loadCatalog();
+  await loadUser();
+  renderNav();
+  render();
+})();
+</script>
+</body>
+</html>

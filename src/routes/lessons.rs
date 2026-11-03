@@ -148,7 +148,90 @@ async fn complete_lesson(
         .bind(if passed { Some(ts.clone()) } else { None })
         .bind(&ts).bind(&idem).execute(&st.db).await?;
 
-    // schedule update simple skipped for MVP
+    // next lesson within the same track
+    let track_id: Option<String> = sqlx::query_scalar("SELECT track_id FROM lessons WHERE id=?")
+        .bind(&id)
+        .fetch_optional(&st.db)
+        .await
+        .ok()
+        .flatten();
+    let current_order: Option<i64> =
+        sqlx::query_scalar("SELECT order_index FROM lessons WHERE id=?")
+            .bind(&id)
+            .fetch_optional(&st.db)
+            .await
+            .ok()
+            .flatten();
+    let next_lesson_id: Option<String> = if let (Some(tid), Some(ord)) = (&track_id, current_order)
+    {
+        sqlx::query_scalar(
+            "SELECT id FROM lessons WHERE track_id=? AND published=1 AND order_index>? ORDER BY order_index LIMIT 1",
+        )
+        .bind(tid)
+        .bind(ord)
+        .fetch_optional(&st.db)
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+
+    // schedule update using SM-2 lite
+    let (interval, ease, lapses) = sqlx::query(
+        "SELECT interval_days,ease,lapses FROM schedules WHERE user_id=? AND lesson_id=?",
+    )
+    .bind(&auth.user_id)
+    .bind(&id)
+    .fetch_optional(&st.db)
+    .await
+    .ok()
+    .flatten()
+    .map(|row| {
+        use sqlx::Row;
+        (
+            row.get::<i64, _>("interval_days"),
+            row.get::<f64, _>("ease"),
+            row.get::<i64, _>("lapses"),
+        )
+    })
+    .unwrap_or((1, 2.5, 0));
+    let (new_interval, new_ease, new_lapses, new_state) =
+        crate::services::scheduler::sm2_update(interval, ease, lapses, passed);
+    let due = (chrono::Utc::now() + chrono::Duration::days(new_interval)).to_rfc3339();
+    let ts = chrono::Utc::now().to_rfc3339();
+    let updated = sqlx::query(
+        "UPDATE schedules SET interval_days=?,ease=?,lapses=?,state=?,due_at=?,updated_at=? WHERE user_id=? AND lesson_id=?",
+    )
+    .bind(new_interval)
+    .bind(new_ease)
+    .bind(new_lapses)
+    .bind(new_state)
+    .bind(&due)
+    .bind(&ts)
+    .bind(&auth.user_id)
+    .bind(&id)
+    .execute(&st.db)
+    .await
+    .map(|r| r.rows_affected())
+    .unwrap_or(0);
+    if updated == 0 {
+        // ensure a row exists even if enrollment created none
+        let _ = sqlx::query(
+            "INSERT OR IGNORE INTO schedules (id,user_id,lesson_id,due_at,interval_days,ease,lapses,state,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(&auth.user_id)
+        .bind(&id)
+        .bind(&due)
+        .bind(new_interval)
+        .bind(new_ease)
+        .bind(new_lapses)
+        .bind(new_state)
+        .bind(&ts)
+        .execute(&st.db)
+        .await;
+    }
 
     Ok(Json(serde_json::json!({
         "lesson_id": id,
@@ -156,8 +239,8 @@ async fn complete_lesson(
         "passed": passed,
         "task_results": results,
         "progress": {"status": if passed {"completed"} else {"in_progress"}, "attempts_count": 1},
-        "next": {"lesson_id": null},
-        "schedule": {"due_at": null, "interval_days": 1, "state": if passed {"review"} else {"relearn"}}
+        "next": {"lesson_id": next_lesson_id},
+        "schedule": {"due_at": due, "interval_days": new_interval, "state": new_state}
     })))
 }
 

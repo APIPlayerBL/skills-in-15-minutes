@@ -2,7 +2,10 @@ use std::env;
 use std::fs;
 use std::process::Command;
 
-const PAYLOAD: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/target/release/skills15.exe"));
+const PAYLOAD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/target/release/skills15.exe"
+));
 
 fn main() {
     let base = env::var("LOCALAPPDATA")
@@ -19,7 +22,5 @@ fn main() {
         return;
     }
     println!("Installed Skills15 to {}", install_dir.display());
-    let _ = Command::new(&dest)
-        .current_dir(&install_dir)
-        .spawn();
+    let _ = Command::new(&dest).current_dir(&install_dir).spawn();
 }
