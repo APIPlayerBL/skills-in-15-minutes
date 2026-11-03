@@ -399,17 +399,24 @@ async function loadProfile(){
   const u=me.data;
   const stats=u.stats||{};
   let certSection='';
+  await loadCatalog();
   const items=(summ.data&&summ.data.items)||[];
-  const trackCards=items.map(x=>`
+  const trackCards=items.map(x=>{
+    const t = TRACKS.find(tt=>tt.id===x.track_id);
+    const title = t ? t.title : x.track_id;
+    const status = (x.percent||0) >= 100 ? 'Завершён' : (x.completed>0 ? 'В процессе' : 'Не начат');
+    return `
     <div class="track">
-      <div><b>${escapeHtml(x.track_id)}</b></div>
+      <div><b>${escapeHtml(title)}</b></div>
+      <div class="hint">${escapeHtml(t?(t.description||''):'' )}</div>
       <div class="progress" style="margin:6px 0"><div style="width:${x.percent||0}%"></div></div>
-      <div class="hint">${x.completed}/${x.total} уроков · ${x.percent||0}%</div>
+      <div class="hint">${x.completed}/${x.total} уроков · ${x.percent||0}% · ${status}</div>
       <div class="row" style="margin-top:8px">
-        <button class="btn secondary" onclick="issueCertificate('${x.track_id}')">Получить сертификат</button>
+        <button class="btn secondary" onclick="openTrack('${x.track_id}')">Открыть трек</button>
+        <button class="btn" onclick="issueCertificate('${x.track_id}')">Сертификат</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
   c.innerHTML = `
     <div class="card">
       <h2>Профиль</h2>
