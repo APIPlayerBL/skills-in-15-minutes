@@ -133,16 +133,54 @@ BASE_TITLE = {
     "spreadsheets": "Таблицы Excel/Google Sheets с нуля",
 }
 
-def make_tasks(topic):
-    title, intro, prompt, correct, distractors = topic
-    options = [{"id": "a", "text": correct}] + [{"id": chr(ord('b')+i), "text": d} for i, d in enumerate(distractors)]
-    return [{
+def make_task(prompt, correct, distractors, weight=1):
+    options = [{"id": "a", "text": correct}] + [{"id": chr(ord('b') + i), "text": d} for i, d in enumerate(distractors)]
+    return {
         "kind": "mcq",
         "prompt": prompt,
         "options": options,
         "answer": "a",
-        "weight": 1
-    }]
+        "weight": weight,
+    }
+
+def make_tasks(topic, level=1, count=5):
+    title, intro, prompt, correct, distractors = topic
+    tasks = []
+    tasks.append(make_task(prompt, correct, distractors))
+    tasks.append(make_task(
+        "Какое утверждение верно для темы «%s»?" % title,
+        correct,
+        distractors + ["Это не относится к теме"],
+    ))
+    if level == 1:
+        tasks.append(make_task(
+            "Начальная ситуация по теме «%s»: что сделать в первую очередь?" % title,
+            "Выполнить базовое действие по инструкции",
+            ["Игнорировать инструкцию", "Делать наобум", "Отложить навсегда"],
+        ))
+    elif level == 2:
+        tasks.append(make_task(
+            "Практическая ситуация по теме «%s»: какой шаг правильный?" % title,
+            "Применить изученный метод и проверить результат",
+            ["Угадать ответ", "Игнорировать детали", "Скопировать чужое решение"],
+        ))
+    else:
+        tasks.append(make_task(
+            "Сложная ситуация по теме «%s»: выберите оптимальную стратегию" % title,
+            "Проанализировать условие и выбрать лучший метод",
+            ["Выбрать первое попавшееся", "Отказаться от решения", "Скопировать чужой ответ", "Игнорировать данные"],
+        ))
+    tasks.append(make_task(
+        "Какая ошибка чаще всего встречается в теме «%s»?" % title,
+        "Ошибаются, если пропускают проверку результата",
+        ["Всегда выбирать первый вариант", "Не читать условие", "Не проверять данные", "Игнорировать ограничения"],
+    ))
+    tasks.append(make_task(
+        "Какой итог можно считать успешным для темы «%s»?" % title,
+        "Результат проверен и соответствует требованию",
+        ["Любой результат без проверки", "Первый полученный ответ", "Ответ, который просто длиннее"],
+    ))
+    return tasks[:count]
 
 TRACKS = []
 
@@ -169,7 +207,7 @@ for slug in CORE:
             "title": topic[0],
             "minutes": 15,
             "intro": topic[1],
-            "tasks": make_tasks(topic),
+            "tasks": make_tasks(topic, 1),
         })
     add_track(BASE_TRACK_SLUG[slug], base_title, "Базовый курс с практическими заданиями", "beginner", len(lessons) * 15, skill_slug, lessons)
 
@@ -181,7 +219,7 @@ for slug in CORE:
                 "title": f"Уровень {level} — {topic[0]}",
                 "minutes": 15,
                 "intro": topic[1],
-                "tasks": make_tasks(topic),
+                "tasks": make_tasks(topic, 1),
             })
         diff = "intermediate" if level == 2 else "advanced"
         track_slug = f"{slug}-level{level}"
@@ -224,7 +262,7 @@ for mslug, (mtitle, skill_slug) in MONTHLY_TITLE.items():
             "title": f"День {day}: {topic}",
             "minutes": 15,
             "intro": f"Ежедневный урок (15 минут), {phase}.",
-            "tasks": make_tasks(topic_tuple),
+            "tasks": make_tasks(topic_tuple, 1),
         })
     add_track(mslug + "-track", mtitle, "Ежедневные мини-уроки по 15 минут", "beginner", 60 * 15, skill_slug, lessons)
 

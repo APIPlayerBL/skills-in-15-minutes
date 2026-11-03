@@ -118,10 +118,12 @@ async fn complete_success_and_idempotent() {
     // adjust answer to known key where possible not necessary for success count maybe; at least first mcq expects b in english. Use explicit correct answers:
     // New seed content: first task of the first English lesson is a single MCQ
     // with option "a" as the correct answer.
+    let mut answers = Vec::new();
+    for t in tasks {
+        answers.push(json!({"task_id": t["id"], "answer": "a"}));
+    }
     let req_body = json!({
-        "task_answers": [
-            {"task_id": tasks[0]["id"], "answer": "a"}
-        ],
+        "task_answers": answers,
         "client_started_at": "2026-11-03T10:00:00Z"
     });
     let req = Request::builder()
