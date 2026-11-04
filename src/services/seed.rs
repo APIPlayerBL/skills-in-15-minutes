@@ -41,13 +41,12 @@ pub async fn seed_all(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             let difficulty = track["difficulty"].as_str().unwrap_or("beginner");
             let minutes = track["estimated_minutes"].as_i64().unwrap_or(15);
             let skill_slug = track["skill"].as_str().unwrap_or_default();
-            let skill_id: Option<String> =
-                sqlx::query_scalar("SELECT id FROM skills WHERE slug=?")
-                    .bind(skill_slug)
-                    .fetch_optional(pool)
-                    .await
-                    .ok()
-                    .flatten();
+            let skill_id: Option<String> = sqlx::query_scalar("SELECT id FROM skills WHERE slug=?")
+                .bind(skill_slug)
+                .fetch_optional(pool)
+                .await
+                .ok()
+                .flatten();
 
             let track_uuid = Uuid::new_v4().to_string();
             let _ = sqlx::query(
@@ -122,15 +121,14 @@ pub async fn seed_all(pool: &SqlitePool) -> Result<(), sqlx::Error> {
                     let cjson = content.to_string();
                     let hash = content_hash(&cjson);
 
-                    let existing: Option<String> = sqlx::query_scalar(
-                        "SELECT id FROM lessons WHERE track_id=? AND slug=?",
-                    )
-                    .bind(&track_id)
-                    .bind(lesson_slug)
-                    .fetch_optional(pool)
-                    .await
-                    .ok()
-                    .flatten();
+                    let existing: Option<String> =
+                        sqlx::query_scalar("SELECT id FROM lessons WHERE track_id=? AND slug=?")
+                            .bind(&track_id)
+                            .bind(lesson_slug)
+                            .fetch_optional(pool)
+                            .await
+                            .ok()
+                            .flatten();
 
                     let lesson_id = if let Some(id) = existing {
                         let _ = sqlx::query(
@@ -167,20 +165,21 @@ pub async fn seed_all(pool: &SqlitePool) -> Result<(), sqlx::Error> {
                         for (i, t) in tasks.iter().enumerate() {
                             let task_id = format!("{}-{}", lesson_id, i + 1);
                             let kind = t.get("kind").and_then(|x| x.as_str()).unwrap_or("mcq");
-                            let prompt = t.get("prompt").and_then(|x| x.as_str()).unwrap_or_default();
+                            let prompt =
+                                t.get("prompt").and_then(|x| x.as_str()).unwrap_or_default();
                             let options = t.get("options").cloned().unwrap_or(Value::Null);
                             let options_json = serde_json::to_string(&options).ok();
-                            let answer = t.get("answer").and_then(|x| x.as_str()).unwrap_or_default();
+                            let answer =
+                                t.get("answer").and_then(|x| x.as_str()).unwrap_or_default();
                             let weight = t.get("weight").and_then(|x| x.as_i64()).unwrap_or(1);
 
-                            let exists: Option<i64> = sqlx::query_scalar(
-                                "SELECT 1 FROM lesson_tasks WHERE id=?",
-                            )
-                            .bind(&task_id)
-                            .fetch_optional(pool)
-                            .await
-                            .ok()
-                            .flatten();
+                            let exists: Option<i64> =
+                                sqlx::query_scalar("SELECT 1 FROM lesson_tasks WHERE id=?")
+                                    .bind(&task_id)
+                                    .fetch_optional(pool)
+                                    .await
+                                    .ok()
+                                    .flatten();
                             let exists = exists.is_some();
 
                             if exists {

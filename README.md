@@ -11,10 +11,10 @@ Topics: languages, programming, finance, psychology, productivity, and in-demand
 
 ## Run locally
 ```bash
-# default uses sqlite:./data.db?mode=rwc
+# database and bind address can be overridden with DATABASE_URL / BIND_ADDR / PORT
 cargo run
 ```
-Open http://127.0.0.1:8080
+The desktop window opens automatically; the local HTTP origin is chosen at startup and shown in the console log.
 
 ## Quality gates
 ```bash

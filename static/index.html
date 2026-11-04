@@ -5,51 +5,179 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Навыки за 15 минут</title>
 <style>
-:root{--bg:#0f1220;--card:#181d32;--muted:#8b95b5;--text:#e9edf8;--acc:#6ea8fe;--ok:#3dd68c;--bad:#ff6b6b;--border:#2a3150}
+:root{
+  --bg:#0b1020;
+  --bg-soft:#121833;
+  --card:#151b34;
+  --card-2:#1d2442;
+  --muted:#9aa6c7;
+  --text:#f4f7ff;
+  --acc:#5b8cff;
+  --acc-strong:#3b6ef0;
+  --ok:#36c98c;
+  --bad:#ff6b7a;
+  --warn:#f4b24d;
+  --border:#2a335b;
+  --shadow:0 18px 45px rgba(4,8,24,.35);
+  --radius:18px;
+  --radius-sm:12px;
+}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
-Top navigation bar sticky at page top with title; primary app UI container below. Styles include cards, buttons, inputs, chips, grid, progress bar, hint text, sidebar, forms, task items, utility classes.
-header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#11162a,#0f1220cc);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-header h1{font-size:18px;margin:0}
-main{max-width:1100px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(91,140,255,.16), transparent 32%),
+    radial-gradient(circle at top right, rgba(54,201,140,.1), transparent 28%),
+    var(--bg);
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--acc)}
+header{
+  position:sticky;top:0;z-index:20;
+  background:rgba(11,16,32,.72);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  padding:14px 20px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.brand{
+  display:flex;align-items:center;gap:12px;
+}
+.brand-mark{
+  width:34px;height:34px;border-radius:11px;
+  background:linear-gradient(135deg,var(--acc),var(--ok));
+  display:grid;place-items:center;
+  color:#081120;font-weight:800;
+  box-shadow:0 10px 24px rgba(91,140,255,.3);
+}
+header h1{font-size:18px;margin:0;letter-spacing:.2px}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+main{max-width:1240px;margin:0 auto;padding:28px 20px 48px}
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:20px;
+  margin-bottom:18px;
+  box-shadow:var(--shadow);
+}
+.card h2,.card h3{margin-top:0}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.btn{background:var(--acc);color:#0b1020;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600}
-.btn.secondary{background:#263055;color:var(--text)}
-.btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--acc)}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-input,textarea,select{background:#10152b;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font:inherit}
-label{font-size:13px;color:var(--muted)}
-.grid{display:grid;gap:12px}
-.grid.cols2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.grid.cols3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.track{border:1px solid var(--border);border-radius:12px;padding:12px;background:#14192d}
-.track h3{margin:0 0 6px}
-.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:#263055;color:var(--muted)}
-.progress{height:8px;background:#0b1020;border-radius:99px;overflow:hidden}
-.progress > div{height:100%;background:var(--ok);transition:width .3s}
-.navbtn{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px 10px;border-radius:8px}
-.navbtn.active{background:#263055;color:var(--text)}
+.btn{
+  background:linear-gradient(180deg,var(--acc),var(--acc-strong));
+  color:#fff;border:0;border-radius:12px;
+  padding:10px 16px;cursor:pointer;font-weight:600;
+  transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+  box-shadow:0 10px 24px rgba(59,110,240,.24);
+}
+.btn:hover{transform:translateY(-1px)}
+.btn.secondary{
+  background:var(--card-2);color:var(--text);
+  box-shadow:none;border:1px solid var(--border);
+}
+.btn.ghost{
+  background:transparent;color:var(--acc);
+  border:1px solid var(--border);box-shadow:none;
+}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+input,textarea,select{
+  background:#0d1328;color:var(--text);
+  border:1px solid var(--border);border-radius:12px;
+  padding:10px 12px;font:inherit;min-height:42px;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+input:focus,textarea:focus,select:focus{
+  outline:none;border-color:var(--acc);
+  box-shadow:0 0 0 3px rgba(91,140,255,.18);
+}
+label{font-size:13px;color:var(--muted);font-weight:500}
+.grid{display:grid;gap:16px}
+.grid.cols2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid.cols3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.track{
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:16px;background:var(--card-2);
+  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.track:hover{
+  transform:translateY(-2px);
+  border-color:rgba(91,140,255,.45);
+  box-shadow:0 18px 34px rgba(4,8,24,.28);
+}
+.track h3{margin:0 0 6px;font-size:17px}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:600;padding:4px 10px;
+  border-radius:999px;background:rgba(255,255,255,.06);
+  color:var(--muted);border:1px solid rgba(255,255,255,.06);
+}
+.progress{height:10px;background:#080d1d;border-radius:999px;overflow:hidden}
+.progress > div{height:100%;background:linear-gradient(90deg,var(--acc),var(--ok));transition:width .35s ease}
+.navbtn{
+  background:rgba(255,255,255,.04);border:1px solid transparent;
+  color:var(--muted);cursor:pointer;padding:8px 14px;
+  border-radius:999px;font-weight:500;
+}
+.navbtn.active{
+  background:rgba(91,140,255,.16);color:var(--text);
+  border-color:rgba(91,140,255,.32);
+}
 .hidden{display:none}
 .error{color:var(--bad)}
 .ok{color:var(--ok)}
-.hint{color:var(--muted);font-size:13px}
-body.light{--bg:#f4f6fb;--card:#ffffff;--muted:#4b5563;--text:#1f2937;--border:#d1d5db;--acc:#2563eb;--ok:#16a34a;--bad:#dc2626}
-body.light header{background:#ffffff;border-bottom:1px solid var(--border)}
-.task{border:1px dashed var(--border);border-radius:10px;padding:10px;margin:8px 0}
-.task.correct{border-color:var(--ok)}
-.task.wrong{border-color:var(--bad)}
-.resultbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
-#content{min-height:60vh}
-.empty{color:var(--muted);padding:20px;text-align:center}
-.modal-back{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:20}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;max-width:460px;width:92%}
+.hint{color:var(--muted);font-size:13px;line-height:1.45}
+body.light{
+  --bg:#f3f6fb;--bg-soft:#ffffff;--card:#ffffff;--card-2:#eef2f9;
+  --muted:#51607f;--text:#182033;--border:#d8e0f0;
+  --shadow:0 18px 45px rgba(16,24,40,.12);
+}
+body.light header{background:rgba(255,255,255,.8);border-bottom:1px solid var(--border)}
+body.light input,body.light textarea,body.light select{background:#fff}
+body.light .track:hover{border-color:rgba(37,99,235,.35)}
+.task{
+  border:1px dashed var(--border);border-radius:12px;
+  padding:14px;margin:10px 0;background:rgba(255,255,255,.02)
+}
+.task.correct{border-color:var(--ok);background:rgba(54,201,140,.08)}
+.task.wrong{border-color:var(--bad);background:rgba(255,107,122,.08)}
+.resultbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+#content{min-height:62vh}
+.empty{
+  color:var(--muted);padding:34px 20px;text-align:center;
+  border:1px dashed var(--border);border-radius:16px;
+}
+.modal-back{
+  position:fixed;inset:0;background:rgba(2,6,20,.72);
+  display:none;align-items:center;justify-content:center;
+  z-index:30;backdrop-filter:blur(6px);
+}
+.modal{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:22px;
+  max-width:480px;width:92%;box-shadow:var(--shadow);
+}
+.hero{
+  padding:24px;position:relative;overflow:hidden;
+}
+.hero::after{
+  content:'';position:absolute;right:-40px;top:-40px;
+  width:180px;height:180px;border-radius:50%;
+  background:radial-gradient(circle,rgba(91,140,255,.25),transparent 68%);
+}
+.kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.muted-card{background:var(--card-2)}
 </style>
 </head>
 <body>
 <header>
-  <h1>Навыки за 15 минут</h1>
-  <nav id="nav" class="row"></nav>
+  <div class="brand">
+    <div class="brand-mark">15</div>
+    <h1>Навыки за 15 минут</h1>
+  </div>
+  <nav id="nav"></nav>
   <div id="userbox" class="row" style="margin-left:auto"></div>
 </header>
 <main id="content"></main>

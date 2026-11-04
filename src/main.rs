@@ -73,7 +73,20 @@ fn main() {
 
     let cfg = Config::from_env();
     let db_url = cfg.database_url.clone();
-    let addr = cfg.bind_addr.clone();
+    let bind_addr = cfg.bind_addr.clone();
+
+    // Ensure the SQLite parent directory exists so default user-data paths work
+    // even on first launch.
+    if let Some(path) = db_url
+        .strip_prefix("sqlite:")
+        .and_then(|rest| rest.split('?').next())
+    {
+        if path != ":memory:" && !path.is_empty() && path != ":memory" {
+            if let Some(parent) = std::path::Path::new(path).parent() {
+                std::fs::create_dir_all(parent).ok();
+            }
+        }
+    }
 
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let pool = rt.block_on(async {
@@ -102,30 +115,45 @@ fn main() {
         pool
     });
 
+    // Bind before spawning the server so we know the real endpoint, including
+    // when port 0 (ephemeral) is requested.
+    let listener = rt.block_on(async {
+        tokio::net::TcpListener::bind(&bind_addr)
+            .await
+            .expect("bind listener")
+    });
+    let addr = listener.local_addr().expect("listener address");
+
     let state = Arc::new(AppState::new(pool, cfg.clone()));
     let state_for_server = state.clone();
-    let addr_for_server = addr.clone();
+    let origin = format!("http://{}", addr);
+    let cors_origins = std::env::var("CORS_ORIGINS").unwrap_or_else(|_| {
+        format!(
+            "{origin},http://127.0.0.1:{port},http://localhost:{port}",
+            port = addr.port()
+        )
+    });
     thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().expect("server runtime");
         rt.block_on(async {
             let app: Router = routes::router(state_for_server.clone())
                 .layer({
-                    let origins = std::env::var("CORS_ORIGINS")
-                        .unwrap_or_else(|_| "http://127.0.0.1:8080,http://localhost:8080,http://127.0.0.1:8099,http://localhost:8099".to_string());
-                    let origins: Vec<axum::http::HeaderValue> =
-                        origins.split(',').filter_map(|s| s.trim().parse().ok()).collect();
-                    CorsLayer::new().allow_origin(origins).allow_methods(Any).allow_headers(Any)
+                    let origins: Vec<axum::http::HeaderValue> = cors_origins
+                        .split(',')
+                        .filter_map(|s| s.trim().parse().ok())
+                        .collect();
+                    CorsLayer::new()
+                        .allow_origin(origins)
+                        .allow_methods(Any)
+                        .allow_headers(Any)
                 })
                 .layer(tower_http::trace::TraceLayer::new_for_http())
                 .fallback(get(static_handler));
-            let listener = tokio::net::TcpListener::bind(&addr_for_server)
-                .await
-                .unwrap();
             axum::serve(listener, app).await.unwrap();
         });
     });
 
-    thread::sleep(Duration::from_secs(2));
+    thread::sleep(Duration::from_millis(200));
 
     let url = format!("http://{}", addr);
     let event_loop = EventLoop::new();
